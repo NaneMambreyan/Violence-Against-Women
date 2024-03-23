@@ -1,0 +1,1389 @@
+---
+output: 
+  pdf_document:
+    toc: no
+---
+
+\begin{titlepage}
+		\begin{center}
+			\vspace*{1cm}
+			
+			\LARGE
+			\textbf{
+				Data Visualization\\~\\
+				DS116 / CS343\\~\\}		
+			\vspace{1.5cm}
+			\LARGE
+			Final Project\\~\\
+			Domestic Violence Against Women in Armenia\\~\\
+			\vspace{3cm}
+			\Large
+			Nane Mambreyan\\ Anna Movsisyan\\ Areg Karapetyan		
+			\vfill					
+			\vspace{0.8cm}				
+			\Large
+			American University of Armenia\\
+			Yerevan, Armenia\\
+			\today
+			
+		\end{center}
+\end{titlepage}
+
+
+```{r, echo=FALSE}
+    knitr::opts_chunk$set(echo = FALSE)
+    knitr::opts_chunk$set(message = FALSE)
+    knitr::opts_chunk$set(include = TRUE)
+    knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(tidyr)
+library(ggridges)
+library(gridExtra)
+library(ggpubr)
+library(reshape2)
+library(stringr)
+library(readxl)
+library(shiny)
+library(flexdashboard)
+library(networkD3)
+library(htmlwidgets)
+library(htmltools)
+library(webshot)
+library(reshape2)
+library(formatR)
+library(sf)
+library(jpeg)
+library(grid)
+library(maps)
+library(rnaturalearth)
+library(classInt)
+library(ggmap)
+library(viridis)
+library(GGally)
+```
+
+```{r}
+df_questions <- read.csv("ExtractedQs.csv")
+
+df_questions <- df_questions %>%
+  mutate(across(starts_with("Q"), 
+                ~ ifelse(!is.na(.), as.numeric(str_extract(., "^\\d")), NA), 
+                .names = "{col}_mod"))
+
+data <- read_excel("GBV database, incl SDG indicators, updated.xlsx")
+
+survey1 <- read_excel('country_allyears.xlsx', sheet = 'Data')
+```
+
+```{=latex}
+\setcounter{tocdepth}{4}
+\renewcommand{\baselinestretch}{2.0}\normalsize
+\tableofcontents
+\renewcommand{\baselinestretch}{1.0}\normalsize
+```
+
+\newpage
+## Overview
+
+The report on domestic violence sheds light on a crucial issue that affects many families in Armenia. Domestic violence can happen between spouses, partners, parents, or other family members. Understanding domestic violence is vital since it helps to address a problem that affects people's safety and well-being. Everyone deserves to feel safe and respected at home. Since the most dominant domestic violence type is the one against women , our report will cover the domestic violence against women in Armenia.
+
+Different bodies can use the report. The government can use the findings to draft laws that protect people from domestic violence. Policymakers can use this report to design practical programs and services. Law enforcement agencies can better understand the patterns of domestic violence, which would help them to react more efficiently and protect victims. NGOs and support organizations can use the data to offer counseling, shelter, and legal assistance. Schools and other educational structures can use the report to create programs that raise awareness about domestic violence.
+
+
+## Research Methodology
+
+Research was conducted using two primary data sources. First one is a survey conducted within the framework of cooperation between the Statistical Committee, AM Partners Consulting Company and International Center for Human Development LLC (ICHD). Data collection was carried out according to the methodology presented by the Armstat to ensure the comparability. The survey tool and manual were also provided by the Armstat. The second data set was taken from open sources found on the internet. It contains aggregated weighted statistics at the regional level by gender for the 2020 Survey on Gender Equality At Home as well as the country and regional level for the 2021 wave. 
+
+The first data source consists of separate files for questions and responses. Some part of the data was in Armenian, hence, we had to take only the numerical values. Before creating a plot, additional data modifications were needed (such as melting). In the second data source, answers for the same questions are given in different columns, hence those replies had to be combined. 
+
+R programming language was used for data analysis and visualization. Interactive dashboard was created using "Shiny" package.
+
+
+## Literature Review
+
+Gender-based violence (GBV) is a significant global issue affecting women's lives. Before analyzing the data for Armenia, research was conducted to understand what data is available and what other research is completed globally. A report by the United Nations (UN) gives a detailed look at gender-based violence in Arab countries. World Health Organization (WHO) explains how common domestic violence is and what factors make it more likely to happen. It includes factors like low levels of education, harmful use of alcohol, community norms, male-controlling behaviors, and other factors. Some of those factors are analyzed and discussed further in the report. Another article looks into how the COVID-19 pandemic has affected the GBV. A survey on Gender Equity at Home is one of our data sources, which helps to see patterns and understand how power dynamics work in households. An innovative index, the VaW Index (VAWI), has been developed to assess the prevalence of violence against women (VaW) in 102 countries worldwide. This multidimensional index incorporates data on four key types of VaW (physical, sexual, psychological, and economic) and generates a single score between 0 and 1. The score indicates a country's overall level of VaW and enables comparisons between different countries. The other data source that was used was received per request and had a report published by Armstat and AM Partners Consulting Company.
+
+\newpage
+
+## Data
+
+The survey data from the first data source includes 2872 interviewed women. The map visually represents the regional distribution of responses. 
+
+The left plot represents how the respondents of the survey are distributed across the regions of Armenia. The right plot represents the proportion of respondents relative to the region's population. Each region is color-coded (the darker the color - the larger the number).  
+
+```{r, include=FALSE}
+marz_mapping <- c(
+  "YEREVAN", "ARAGATSOTN", "ARARAT", "ARMAVIR", "GEGHARKUNIK",
+  "LORI", "KOTAYK", "SHIRAK", "SYUNIK", "VAYOTZ DZOR", "TAVUSH"
+)
+
+arm <- st_read('Armenia_Marzes/Armenia_Marzes.shp')
+
+marz_frequencies <- table(data$Marz)
+marz_frequencies_df <- as.data.frame(marz_frequencies)
+colnames(marz_frequencies_df) <- c("Marz", "Frequency")
+
+marz_frequencies_df$Marz <- marz_mapping[marz_frequencies_df$Marz]
+
+combined_df <- merge(arm, marz_frequencies_df, by.x = "Name_Eng", by.y = "Marz", all.x = TRUE)
+
+combined_df$Total_Po_1 <- as.numeric(gsub("\\s", "", combined_df$Total_Po_1))
+
+combined_df$proportion <- combined_df$Frequency / combined_df$Total_Po_1 * 100
+
+combined_Regions_df <- combined_df[-11,]
+
+
+# 901 - YEREVAN
+# 902 - ARAGATSOTN
+# 903 - ARARAT
+# 904 - ARMAVIR
+# 905 - GEGHARKUNIK
+# 906 - LORI
+# 907 - KOTAYK
+# 908 - SHIRAK
+# 909 - SYUNIK
+# 910 - VAYOTZ DZOR
+# 911 - TAVUSH
+
+```
+
+
+```{r, fig.height=3}
+sp1 <- ggplot(data = combined_df, aes(fill = Frequency)) + 
+  geom_sf() +
+  labs(title = "Absolute")+
+  scale_fill_gradient2(low = "white",mid = "yellow", high = "darkorange3", midpoint = 80)+
+  theme_minimal()+
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text = element_blank()
+  )
+
+# sp2 <- ggplot(data = combined_Regions_df, aes(fill = Frequency)) + 
+#   geom_sf() +
+#   labs(title = "Yerevan excluded")+
+#   scale_fill_gradient2(low = "white",mid = "yellow", high = "darkorange3", midpoint = 100)+
+#   theme_minimal()+
+#   theme(
+#     plot.title = element_text(hjust = 0.5),
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank(),
+#     axis.text = element_blank()
+#   )
+
+sp2 <- ggplot(data = combined_df, aes(fill = proportion)) + 
+  geom_sf() +
+  labs(title = "Proportion")+
+  scale_fill_gradient2(low = "white",mid = "yellow", high = "darkorange3", midpoint = 0.08, name = "Proportion")+
+  theme_minimal()+
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text = element_blank()
+  )
+
+grid.arrange(sp1, sp2, nrow = 1, top = "Distribution of survey respondents per region")
+
+```
+
+According to the number of respondents, the majority of the respondents are from Yerevan, with all other regions being equally distributed, however proportionally all regions are equally distributed (0.08-0.10% of the population). 
+
+```{r, fig.height=3}
+settl_data <- data %>%
+  count(Set)
+
+settl_data[[1]][1] = "Urban"
+settl_data[[1]][2] = "Rural"
+
+ggplot(settl_data, aes(x = factor(Set), y = n, fill = factor(Set))) +
+  geom_bar(stat = "identity") +
+  geom_label(aes(label = n), position = position_dodge(width = 0.9), vjust = 0.6, size = 5, hjust = 0.5, fill="white") +
+  labs(title = "Settlement type of the respondents",
+       x = "",
+       y = "Number of people") +
+  scale_fill_manual(values = c("#377EB8", "#377EB8"), name = "Settlement type") +
+  theme_minimal()+
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x.bottom = element_text(size = 12),
+    legend.position = "none"
+  )
+
+```
+
+The plot shows that the majority of the respondents are from urban areas (54.3%) rather than rural (45.7%). Of 1559 respondents from urban regions, 818 are from Yerevan, and the rest are from other cities.
+
+The survey covered a diverse age range, with respondents spanning from young adults to seniors with a target audience of women aged 15-59. Since all respondents are female, a one-sided population pyramid shows the age distribution.
+
+```{r, fig.height=3} 
+age_data <- data %>%
+  count(Q107)
+
+age_data$Age_Group <- cut(age_data$Q107, breaks = c(15, 20, 25, 30, 35, 40, 45, 50, 55, 60), 
+                          labels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59"), right = FALSE)
+
+
+ggplot(age_data, aes(x = factor(Age_Group), y = n)) +
+  geom_bar(stat = "identity", fill = "#377EB8", color = "#377EB8") +
+  labs(title = "Population pyramid of respondents",
+       x = "Age group",
+       y = "Number of people") +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    # axis.text.x.bottom =  element_blank(),
+    plot.title = element_text(hjust = 0.5)
+  )
+ 
+```
+
+The majority of respondents are older than 30, with the largest age group being 30-34, with more than 400 people. The smallest age group is 15-19, with around 150 people.
+
+The second data source contains survey data for 132 countries. The below plot shows in which countries the survey took place. 
+
+```{r, fig.height=4}
+unique_countries <- data.frame(Subregion = unique(survey1$Subregion))
+
+sf_world <- ne_countries(returnclass='sf')
+sf_world$Presence <- ifelse(sf_world$name %in% unique_countries$Subregion, "Yes", "No")
+
+ggplot(sf_world) +
+  geom_sf(aes(fill = as.factor(Presence)), color = "black") +
+  scale_fill_manual(values = c("No" = "white", "Yes" = "#377EB8"), name = "Is Country present?") +
+  labs(title = "Survey countries") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom"
+  )
+
+```
+
+The missing countries are mainly from central Africa and some are from Western Asia. A significant country that is not included in the survey is China.
+
+\newpage
+## Hypotheses and Analysis
+
+### Influence of socioeconomic factors in Armenia
+
+In this section, we are exploring the idea that there might be a link between social and economic factors and experiencing domestic violence in Armenian families. We'll look closely at the factors that contribute to this relationship and try to find out if there is indeed a significant connection.
+
+\textit{Hypothesis: The prevalence and severity of domestic violence are significantly influenced by a range of socioeconomic factors, including education, drinking habits, abusive family members, agreements/disagreements in the family, voicing(or not) gender violence, family income and social aspects.}
+
+```{r}
+data_bubble <- data %>%
+  filter(Q801 <= 2) %>%
+  filter(Q505b <= 20) %>%
+  filter(!is.na(Q505b))
+```
+
+With the assumption that various social factors impact domestic violence, we now turn our focus to education. How does a husband's educational attainment correlate with the incidence of domestic violence in Armenian families? In this section, we delve into the data, seeking patterns that might illuminate this aspect of the societal challenge. We will try to find out whether there is any pattern between the level of education of husband and violence against women in Armenian families.
+
+```{r, fig.height=4.5}
+response_counts <- data_bubble %>%
+  group_by(Q801, Q505b) %>%
+  summarize(count = n(), .groups = 'drop')
+
+ggplot(response_counts, aes(x = as.factor(Q801), y = Q505b, size = count)) +
+  geom_point(color = "#377EB8") +
+  scale_size(name = "Number of Responses") +
+  labs(title = "Counts of Injury Reports by Husband's Education Level", # by or vs? need to write bubble chart in the title?
+       x = "Injury Report",
+       y = "Husband's Education Level (years)") +
+  theme_minimal() +
+  scale_x_discrete(breaks = 1:2, labels = c("Yes","No")) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=0.5),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(linetype = "dashed",),
+        plot.title = element_text(hjust = 0.5)) 
+
+```
+\par\bigskip
+
+The bubble chart represents the connection between the husband's education level (given by years) in ascending order for all options present in the survey. There are no reported education years in the range from two to nine years.
+
+Reports of domestic violence injuries appear more frequently in families where the husband has only completed 10 years of schooling. However, the most frequent responses are concentrated for 10 years of education for both categories, concluding that the number of years of husband's education is not directly affecting the domestic violence in household. Moreover, the majority of the respondents have not reported any injuries for almost all categories.
+
+\newpage
+We are going to investigate and analyze women abuse reports, placing a particular focus on the influence of drinking habits as a crucial habitual factor. We aim to explore the intricate relationship between drinking behaviors of the family members and potential abuse among women.
+\par\bigskip
+
+```{r, fig.height=4.5}
+sankey_data <- data %>%
+  filter(Q509 %in% 1:6) %>%
+  select(Q509, Q705Aa, Q705Ab, Q705Ac, Q705Ad, Q705Ae, Q705Af) %>%
+  gather(key = "abuse_type", value = "abuse_reported", Q705Aa, Q705Ab, Q705Ac, Q705Ad, Q705Ae, Q705Af) %>%
+  mutate(abuse_type = recode(abuse_type,
+                             "Q705Aa" = "Slapped",
+                             "Q705Ab" = "Beat/Pulled Hair",
+                             "Q705Ac" = "Beaten with Item",
+                             "Q705Ad" = "Hit by Foot",
+                             "Q705Ae" = "Intentionally Hurt",
+                             "Q705Af" = "Frightened/Used Weapon"),
+         Q509 = factor(Q509, levels = 1:6, labels = c("Everyday", "Once or twice a week", "1-3 times a month", "Less than once a month", "Haven't drunk already a year", "Never"))) %>%
+  filter(abuse_reported == 1) %>%
+  group_by(Q509, abuse_type) %>%
+  summarise(count = n(), .groups = 'drop')
+
+nodes <- data.frame(name = c(as.character(sankey_data$Q509), as.character(unique(sankey_data$abuse_type))))
+nodes <- unique(nodes)
+
+links <- sankey_data %>%
+  mutate(source = match(Q509, nodes$name) - 1,
+         target = match(abuse_type, nodes$name) - 1) %>%
+  select(source, target, count)
+
+# Create the Sankey plot
+sankey <- sankeyNetwork(Links = links, Nodes = nodes, Source = "source", 
+                        Target = "target", Value = "count", NodeID = "name",
+                        units = "Reports", fontSize = 12, nodeWidth = 30)
+
+# Add a title to the Sankey plot
+sankey <- htmlwidgets::prependContent(
+  sankey,
+  htmltools::tags$div(
+    style = "text-align: center; font-size: 16px; font-weight: bold; color: black;",
+    "Drinking Frequency and Abuse Type"
+  )
+)
+
+# Display the Sankey plot
+# sankey
+
+# Save the Sankey plot as an HTML file
+htmlwidgets::saveWidget(sankey, "temp_plot1.html")
+
+# Take a screenshot of the HTML widget and display it in the document
+webshot2::webshot("temp_plot1.html", "screenshot1.png")
+```
+
+The provided Sankey diagram presents a sophisticated depiction of the reported abuse in relation to husbands' frequency of alcohol consumption. The diagram indicates that, among all alcohol consumption frequencies, slapping is the most commonly reported form of abuse. This is indicated by the thickness of the bands that correspond to this category of abuse. It's interesting to note that there are a lot of abuse reports in the category for husbands who drink "Less than once a month," suggesting that regular drinking is not the only sign of abuse. It's also noteworthy that there are numerous reports of abuse from husbands who claim to "Never" drink, casting doubt on the notion that alcohol use causes domestic violence. The insight that we get from this visualization is that usually gender violence rate isn't associated with drinking. Although a higher frequency of drinking does not always imply a stronger relationship with abuse in general, the data indicates that factors other than alcohol consumption may be more important in explaining the incidence of gender-based violence. Since the reported cases do not clearly reflect the expected correlation between alcohol use and abuse, this analysis calls for a more thorough investigation of other social and psychological factors that support abusive behaviour.
+
+\par\bigskip
+
+The aim of the next visualization is to explore and highlight the relationship between confronting abusive situations, specifically from the father figure, and various types of reported domestic violence incidents. The data is filtered to include responses where the participants indicated either having abusive father-in-low or not. The core assumption is that men who had abusive father, might have been negatively influenced by that behavior, which may or may not lead to violence in their own families. In short, we would investigate whether there's a relationship between men's experiences with an abusive father-in-law and their own abusive behaviors through these visualizations.
+\par\bigskip
+
+```{r, fig.height = 3.5}
+plot_data <- data %>%
+  filter(Q1008 %in% c(1, 2)) %>%
+  select(Q1008, Q705Aa, Q705Ab, Q705Ac, Q705Ad, Q705Ae, Q705Af) %>% 
+  gather(key = "abuse_type", value = "abuse_reported", Q705Aa, Q705Ab, Q705Ac, Q705Ad, Q705Ae, Q705Af) %>%
+  mutate(abuse_type = recode(abuse_type, 
+                             "Q705Aa" = "Slapped", 
+                             "Q705Ab" = "Beat/Pulled\nHair", 
+                             "Q705Ac" = "Beaten with\nItem", 
+                             "Q705Ad" = "Hit by Foot", 
+                             "Q705Ae" = "Intentionally\nHurt", 
+                             "Q705Af" = "Frightened or\nUsed Weapon"),
+         Q1008 = factor(Q1008, levels = c(1, 2), labels = c("...was abusive", "...was not abusive"))) %>%
+  filter(abuse_reported == 1) %>%
+  group_by(Q1008, abuse_type) %>%
+  summarise(count = n(), .groups = 'drop')
+
+ggplot(plot_data, aes(x = abuse_type, y = count, fill = Q1008)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Husband's Parental Abuse and Domestic Violence Types",
+       x = "Type of Domestic Violence",
+       y = "Count of Reports",
+       fill = "Father-in-law...") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x.bottom = element_text(vjust = 1.1)
+    )
+
+```
+\par\bigskip
+
+ Results are represented through a grouped bar chart. Each bar in the chart corresponds to a specific type of domestic violence, such as being slapped, beaten with an item, or intentionally hurt. The height of the bars reflects the count of reported incidents, while different colors distinguish between cases where the father was abusive and cases where he was not. This visualization allows for a comparative analysis, shedding light on the prevalence of different forms of domestic violence in households where paternal abuse is present versus those where it is not.
+
+To make the plot more informative we can look at the proportion of abusive and not abusive fathers for women who confronted violence:
+\par\bigskip
+
+```{r, fig.height = 3}
+plot_data <- data %>%
+  filter(Q1008 %in% c(1, 2)) %>%
+  select(Q1008, Q705Aa, Q705Ab, Q705Ac, Q705Ad, Q705Ae, Q705Af) %>%
+  gather(key = "abuse_type", value = "abuse_reported", Q705Aa, Q705Ab, Q705Ac, Q705Ad, Q705Ae, Q705Af) %>%
+  mutate(abuse_type = case_when(
+    .$abuse_type == "Q705Aa" ~ "Slapped",
+    .$abuse_type == "Q705Ab" ~ "Beat/Pulled\nHair",
+    .$abuse_type == "Q705Ac" ~ "Beaten with\nItem",
+    .$abuse_type == "Q705Ad" ~ "Hit by Foot",
+    .$abuse_type == "Q705Ae" ~ "Intentionally\nHurt",
+    .$abuse_type == "Q705Af" ~ "Frightened or\nUsed Weapon"
+  ),
+  Q1008 = factor(Q1008, levels = c(1, 2), labels = c("...was abusive", "...was not abusive"))
+  ) %>%
+  filter(abuse_reported == 1) %>%
+  group_by(abuse_type, Q1008) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  group_by(abuse_type) %>%
+  mutate(proportion = count / total) %>%
+  ungroup()
+
+ggplot(plot_data, aes(x = abuse_type, y = proportion, fill = Q1008)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("...was abusive" = "#E41A1C", "...was not abusive" = "#377EB8")) +
+  labs(title = "Proportional Distribution of Husband's \n
+       Parental Abuse and Domestic Violence Types",
+       x = "Type of Domestic Violence",
+       y = "Percentage of Reports",
+       fill = "Father-in-law...") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        plot.title = element_text(hjust = 0.5),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x.bottom = element_text(vjust = 1.1)
+    )
+```
+\par\bigskip
+
+
+The above stacked bar chart shows the proportional distribution of different types of domestic violence based on whether the respondents' fathers-in-law were abusive. We can see that the higher proportion of husbands that have signs of any kind of domestic violence have non-abusive fathers. So we can state that the sons of abusive husbands have less tendency to be abusive themselves.
+
+
+Next we investigate the cultural and social attitude towards pregnancy and family planning in Armenian families. Doing so will help to extract possible correlation between violence and disagreements on this topic in families. Hence we consider whether individuals desire to have a baby(or desire not to have a baby) may shed light on how this aspect influences the occurrence of gender-based violence.
+\par\bigskip
+
+```{r, fig.height = 4.5}
+options <- c(
+  `0` = "Wasn't\nasked",
+  `1` = 'At that\ntime',
+  `2` = 'Little\nlater',
+  `3` = "Didn't\nwant to",
+  `4` = "Was never\nagainst",
+  `5` = "Doesn't\nremember",
+  `6` =  'Answer rejected'
+)
+
+rug_data <- data %>%
+  select(Q407, Q408, Q708a, Q801) %>%
+  mutate(Q407 = ifelse(is.na(Q407), 0, Q407)) %>%
+  mutate(Q408 = ifelse(is.na(Q408), 0, Q408)) %>%
+  mutate(Q407 = ifelse(Q407 == 8, 5, Q407)) %>%
+  mutate(Q408 = ifelse(Q408 == 8, 5, Q408)) %>%
+  mutate(Q407 = ifelse(Q407 == 9, 6, Q407)) %>%
+  mutate(Q407 = ifelse(Q408 == 9, 6, Q408))
+
+
+ggplot(rug_data, aes(x = Q407, y = Q408)) +
+      geom_jitter(alpha = 0.25, height=0.25, width = 0.25, color = "#377EB8") + 
+      geom_rug(alpha = 0.1, position = 'jitter', color = "#377EB8") +
+      labs(title = 'Pregnancy planning in Armenian families',
+           x = 'Women perspective', y = 'Men perspective') +
+      scale_y_continuous(breaks = 0:6, labels = options) +
+      scale_x_continuous(breaks = 0:6, labels = options) +
+   theme_minimal()+
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(linetype = "dashed")
+  )
+
+```
+\par\bigskip
+
+Due to structure of the questionnaire, not all respondents have answered these questions, hence there is an option "Wasn't asked". It is important to note that men perspective is presented by women, since there are no men respondents. Most of the respondents to this question answered that both they and their husband wanted to have a child when the wife was pregnant. Other frequent answer is both of the partners were never against. Having seen that couples mostly agree on family planning, we are going to also look at extreme cases, when there is slight or considerable disagreements among couples on family planning questions. To do that, we are going to extract only the respondents who answered to the above mentioned questions as "Little later", or "Didn't want to", and see whether there is some difference between these groups when it comes to gender violence. For that, we will explore another plot show-casting how the above mentioned groups responded to the question about being beaten by their husband and being afraid of him or not.
+
+
+To investigate whether there is any correlation between the expressed preferences and the incidence of violence, we will explore another plot show-casting how the above mentioned groups responded to the question whether they were beaten by their husband and whether they are afraid of him or not.
+\par\bigskip
+
+```{r, fig.height = 3.5}
+heatmap_data <- rug_data %>%
+  filter((Q407 %in% c(1, 2, 3) | (Q408 %in% c(1, 2, 3)))) %>%
+  select(Q708a, Q801) %>%
+  na.omit() %>%
+  mutate(Q708a = recode(Q708a, 
+    "1" = 1,
+    "2" = 2,
+    "3" = 3,   
+    "4" = 4,   
+    "7" = 5,   
+    "8" = 6,
+    "9" = 7)) %>% 
+  mutate(Q801 = recode(Q801, 
+    "1" = 1,
+    "2" = 2,
+    "8" = 3,
+    "9" = 4)) %>%
+  group_by(Q801, Q708a) %>%
+  summarize(Count = n(), .groups = 'drop')
+
+all_combinations <- expand.grid(Q801 = unique(heatmap_data$Q801),
+                                Q708a = unique(heatmap_data$Q708a))
+
+heatmap_data <- merge(heatmap_data, all_combinations, all = TRUE)
+heatmap_data[is.na(heatmap_data)] <- 0 # replacing NAs with 0
+
+
+options_Q708a <- c('Never', 'Sometimes', 
+             'Many times', 'Almost always',
+             'Used to', 
+             'Dont know',
+             'No answer /\n Answer rejected')
+
+options_Q801 <- c('Yes', 'No', 
+                  'Dont know', 
+             'No answer /\n Answer rejected')
+
+
+heatmap_data <- rbind(heatmap_data,c(1,6,0))
+heatmap_data <- rbind(heatmap_data,c(2,6,0))
+
+ggplot(data = heatmap_data, aes(x=Q801, y=Q708a, fill = Count)) +
+  geom_tile(color = "white", linewidth = 1.5) +
+  scale_y_continuous(breaks = 1:7, labels = options_Q708a) +
+  scale_x_continuous(breaks = 1:4, labels = options_Q801) +
+  scale_fill_gradient2(low = "lightskyblue1",mid = "dodgerblue3", high = "#377EB8", midpoint = 30, name = "Count") +
+  geom_text(aes(label = Count), color = "black") +
+  labs(y = 'Are you afraid of your husband?',
+       x = 'Have you ever got injured by your husband?',
+       title = 'Violence rate among respondents') +
+  theme_minimal()+
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+```
+\par\bigskip
+
+We see that most of the respondents answered that they are not afraid of their husband and that they never got injuries by him. Another thing to note is that there are few entries depicted on the heatmap meaning that out of all respondents, only a few had disagreements on this topic with their couple, still the disagreement didn't end up with violence.
+\par\bigskip
+
+These two plots show that in Armenian families couples mostly have similar attitudes towards pregnancy and family planning and in extreme cases when they don't have similar attitudes, it doesn't affect gender violence.
+
+
+\newpage
+### Influence of social norms in Armenia
+
+As we dig into the numbers, we're trying to figure out how cultural norms and traditional gender roles connect with domestic violence. 
+
+\textit{Hypothesis: Cultural norms and traditional gender roles significantly influence the occurrence of domestic violence.}
+
+An essential aspect that is influenced by social norms and is directly connected to domestic violence is whether the man has the right to hit his wife. The questionnaire includes a few reasons why men might beat their wives.  
+
+
+```{r, fig.height = 3}
+selected_columns <- c("Q607a_mod", "Q607b_mod", "Q607c_mod", "Q607d_mod", "Q607e_mod", "Q607f_mod")
+
+df_questions_long <- df_questions %>%
+  select(all_of(selected_columns)) %>%
+  gather(key = "Question", value = "Response", everything()) %>%
+  mutate(Answer = case_when(
+    Response == 1 ~ "Yes",
+    Response == 0 ~ "No",
+    Response == 8 ~ "Don't know"
+  ))
+
+replacements <- c("Q607a_mod"= "... doesn't do chores",
+                  "Q607b_mod"= "... is not obeying her husband",
+                  "Q607c_mod"= "... declines intercourse",
+                  "Q607d_mod"= "... asks husband about other girlfriend",
+                  "Q607e_mod"= "... is suspected in cheating",
+                  "Q607f_mod"= "... is cheating")
+
+
+df_questions_long <- df_questions_long %>%
+  mutate(Question = str_replace_all(Question, replacements))
+
+count_data <- df_questions_long %>%
+  group_by(Answer, Question) %>%
+  summarise(count = n()) %>%
+  filter(!is.na(Answer))
+
+count_data$Answer <- factor(count_data$Answer, levels = c("Yes", "No", "Don't know"))
+count_data$Question <- factor(count_data$Question, levels = c("... declines intercourse",
+                                                              "... asks husband about other girlfriend",
+                                                              "... doesn't do chores",
+                                                              "... is not obeying her husband",
+                                                              "... is suspected in cheating",
+                                                              "... is cheating"))
+
+ggplot(count_data, aes(x = Answer, y = Question, fill = count)) +
+  geom_tile(color = "white", linewidth = 1.5) +
+  geom_text(aes(label = ifelse(count > 0, count, "")), vjust = 0.5) +
+  scale_fill_gradient2(low = "lightskyblue1",mid = "dodgerblue3", high = "#377EB8", midpoint = 1500, name = "Count") +
+  labs(title = "The man has the right to hit his wife if she ...",
+       x = "",
+       y = "") +
+  theme_minimal() +
+  scale_y_discrete(limits = rev(levels(count_data$Question))) +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+    panel.grid.major = element_blank(),
+    plot.title = element_text(hjust = 0.5)
+    )
+
+```
+
+Heatmap suggests similar answers for most of the cases, where the majority thinks that a man doesn't have the right to hit his wife, smaller portions believe a man has the right to beat his wife, and a tiny amount prefer not to answer that specific question. Out of all cases, the questions with the highest occurrence of "Yes" are cases when women are cheating, are suspected of cheating, or are not obeying their husbands. A more significant portion thinks that in those cases, a man has the right to hit his wife. Although that portion is not the majority, it is still substantial. The only case where the majority think a man has the right to hit his wife is the case when the wife is cheating. 
+
+Using data for the given question, social norms are held, as women think that a man has the right to hit his wife in the given circumstances. Such a mindset may lead to domestic violence, which won't be reported in any way by the woman since, in her opinion, it was the "correct" thing to do by her husband. 
+
+To further analyze domestic violence cases, it would be helpful to consider only those respondents who answered "Yes" to any of the 6 cases from the last question. 
+
+```{r}
+df_can_hit <- df_questions %>%
+  filter(Q607a_mod == 1 | Q607b_mod == 1 | Q607c_mod == 1 | Q607d_mod == 1 | Q607e_mod == 1 | Q607f_mod == 1)
+```
+
+For the new target group, a review of a few questions from the questionnaire would be interesting to observe. The following chart refers to some situations which are typical for some women. The question is if their husband did any of the listed things.
+
+```{r, fig.height = 3}
+df_long <- df_can_hit %>%
+  select(Q703Aa_mod, Q703Ab_mod, Q703Ac_mod, Q703Ae_mod, Q703Af_mod, Q703Ag_mod) %>%
+  gather(key = "Question", value = "Response")
+
+df_long$Response <- ifelse(df_long$Response == 1, "Yes", "No")
+
+replacements <- c("Q703Aa_mod"= "Tried to prevent his wife\nof meeting friends",
+                  "Q703Ab_mod"= "Tried to limit wife's\ncommunication with relatives",
+                  "Q703Ac_mod"= "Demanded to know wife's\nlocation at any time",
+                  "Q703Ae_mod"= "Became mad when wife is\ninteracting with other man",
+                  "Q703Af_mod"= "Suspected cheating",
+                  "Q703Ag_mod"= "Expected to be asked permission\nbefore going to the doctor")
+
+
+df_long <- df_long %>%
+  mutate(Question = str_replace_all(Question, replacements))
+
+heatmap_data <- df_long %>%
+  group_by(Question, Response) %>%
+  summarise(count = n())%>%
+  filter(!is.na(Response))
+
+heatmap_data$Response <- factor(heatmap_data$Response, levels = c("Yes", "No"))
+
+ggplot(heatmap_data, aes(y = Question, x = Response, fill = count)) +
+  geom_tile(color = "white", linewidth = 1.5) +
+  geom_text(aes(label = count), vjust = 0.5) +
+  labs(title = "Social abuse\nCurrent/latest husband did one of the following:",
+       x = "",
+       y = "") +
+  scale_fill_gradient(low = "lightskyblue1", high = "#377EB8", name = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+    panel.grid.major = element_blank(),
+    plot.title = element_text(hjust = 0.5)
+    )
+
+```
+
+The given data suggests that husbands haven't done the listed things in most cases. The only case where a larger portion answered "Yes" is the case of the husband always wanting to know his wife's location. While all cases are examples of manipulations by the husband, demanding location in some cases can be viewed as a safety precaution. 
+
+The following question concentrates on the kinds of verbal abuse by the man and whether it happened to the respondents.
+
+```{r, fig.height=3.3}
+df_long <- df_can_hit %>%
+  select(Q704Aa_mod, Q704Ab_mod, Q704Ac_mod, Q704Ad_mod) %>%
+  gather(key = "Question", value = "Response")
+
+df_long$Response <- ifelse(df_long$Response == 1, "Yes", "No")
+
+replacements <- c("Q704Aa_mod"= "Cursed and made\nwoman feel bad",
+                  "Q704Ab_mod"= "Humiliate in front of others",
+                  "Q704Ac_mod"= "Intentionally made things\nthat would scare the woman",
+                  "Q704Ad_mod"= "Threatened to harm woman\nor someone she loves")
+
+
+df_long <- df_long %>%
+  mutate(Question = str_replace_all(Question, replacements))
+
+heatmap_data <- df_long %>%
+  group_by(Question, Response) %>%
+  summarise(count = n())%>%
+  filter(!is.na(Response))
+
+heatmap_data$Response <- factor(heatmap_data$Response, levels = c("Yes", "No"))
+
+ggplot(heatmap_data, aes(y = Question, x = Response, fill = count)) +
+  geom_tile(color = "white", linewidth = 1.5) +
+  geom_text(aes(label = count), vjust = 0.5) +
+  labs(title = "Verbal abuse\nCurrent/latest husband did one of the following:",
+       x = "",
+       y = "") +
+  scale_fill_gradient(low = "lightskyblue1", high = "#377EB8", name = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+    panel.grid.major = element_blank(),
+    plot.title = element_text(hjust = 0.5)
+    )
+
+```
+
+As in the previous case, for most of the cases, the majority answered "No", which means they didn't experience most of the presented cases. The only case, which relatively more women had experienced, was a man cursing and making his wife feel bad. 
+
+Another common type of domestic violence is physical abuse. The questionnaire helps to understand how often such cases happen.
+
+```{r, fig.height = 3.3}
+df_long <- df_can_hit %>%
+  select(Q705Aa_mod, Q705Ab_mod, Q705Ac_mod, Q705Ad_mod, Q705Ae_mod, Q705Af_mod) %>%
+  gather(key = "Question", value = "Response")
+
+df_long$Response <- ifelse(df_long$Response == 1, "Yes", "No")
+
+replacements <- c("Q705Aa_mod"= "Slapped or threw\nan object at woman",
+                  "Q705Ab_mod"= "Pushed, hit or pulled hair",
+                  "Q705Ac_mod"= "Hit with his fist\nor any other object",
+                  "Q705Ad_mod"= "Hit with his feet,\ndragged or beat up",
+                  "Q705Ae_mod"= "Choked or\nburned (cigarette)",
+                  "Q705Af_mod"= "Threatened or used gun,\nknife or any other weapon")
+
+
+df_long <- df_long %>%
+  mutate(Question = str_replace_all(Question, replacements))
+
+heatmap_data <- df_long %>%
+  group_by(Question, Response) %>%
+  summarise(count = n())%>%
+  filter(!is.na(Response))
+
+heatmap_data$Response <- factor(heatmap_data$Response, levels = c("Yes", "No"))
+
+ggplot(heatmap_data, aes(y = Question, x = Response, fill = count)) +
+  geom_tile(color = "white", linewidth = 1.5) +
+  geom_text(aes(label = count), vjust = 0.5) +
+  labs(title = "Physical abuse\nCurrent/latest husband did one of the following:",
+       x = "",
+       y = "") +
+  scale_fill_gradient(low = "lightskyblue1", high = "#377EB8", name = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+    panel.grid.major = element_blank(),
+    plot.title = element_text(hjust = 0.5)
+    )
+
+```
+
+Unlike previous questions, for all cases the majority didn't experience any of the presented actions by their husband. One case, which had a bit larger occurrence than the others, is a man slapping or throwing an object at his wife. 
+
+After filtering out only those women who were influenced by social norms and thought that the man has the right to hit the woman helped to analyze whether social norms have some connection with domestic violence. For that subgroup, an analysis for each type of abuse (social, verbal, and physical) was made. Results suggest that most of the women didn't experience the presented scenarios. 
+
+Some questions from the questionnaire emphasize the factor of cultural norms in families. One such example is understanding if it is essential for the man to be the head of the household. Another example is understanding if women think that they are obliged to have intercourse even when they don't want to. The results of the survey for the given questions are summarized below.
+
+
+```{r, fig.height = 3.5}
+Q603_count <- df_questions %>%
+  count(Q603_mod, na.rm = TRUE)
+
+Q603_count[[1]][1] = "Yes"
+Q603_count[[1]][2] = "No"
+Q603_count[[1]][3] = "Don't\nknow"
+Q603_count[[1]][4] = "No answer"
+
+answ_order <- c("Yes","No","Don't\nknow", "No answer")
+
+Q603_count$Q603_mod <- factor(Q603_count$Q603_mod, levels = answ_order)
+
+pl603 <- ggplot(Q603_count, aes(x = Q603_mod, y = n)) +
+  geom_bar(stat = "identity", fill = "#377EB8") +
+  geom_label(aes(label = n), vjust = 0.5) + 
+  labs(title = "It is important for the man to show\n that he is the head of the household.",
+       x = "",
+       y = "Count") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0,2100))+
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 10),
+    panel.grid.minor = element_blank()
+    )  
+
+
+Q605_count <- df_questions %>%
+  count(Q605_mod, na.rm = TRUE)
+
+Q605_count[[1]][1] = "Yes"
+Q605_count[[1]][2] = "No"
+Q605_count[[1]][3] = "Don't\nknow"
+Q605_count[[1]][4] = "No answer"
+
+answ_order <- c("Yes","No","Don't\nknow", "No answer")
+
+Q605_count$Q605_mod <- factor(Q605_count$Q605_mod, levels = answ_order)
+
+pl605 <- ggplot(Q605_count, aes(x = Q605_mod, y = n)) +
+  geom_bar(stat = "identity", fill = "#377EB8") +
+  geom_label(aes(label = n), vjust = 0.5) + 
+  labs(title = "Women are obliged to have\n intercourse if they don't want.",
+       x = "",
+       y = "") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0,2100))+
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 10),
+    panel.grid.minor = element_blank()
+    )  
+
+grid.arrange(pl603, pl605, ncol = 2)
+
+```
+
+The graph on the left suggests that most of the women who participated in the survey think it is indeed crucial for the man to be considered the head of the household. A smaller portion feels that it is not critical for the man to be considered the head, and a tiny part of the respondents didn't know or didn't have an answer. 
+
+The graph on the right shows that most women don't feel obliged to have intercourse if they don't want to. A much smaller portion thinks that they are compelled, and similar to the previous case, a tiny part of the respondents didn't know or didn't have an answer. 
+
+On the one hand, the majority obeys the social norms when they agree that it is vital for the man to be the head of the household; on the other, they don't think that women should have intercourse whenever they don't want. This shows that not all women are fully affected by social norms.
+
+```{r}
+df_violence_total <- df_questions %>%
+  filter(Q703Aa_mod == 1 | Q703Ab_mod == 1 | Q703Ac_mod == 1 | Q703Ae_mod == 1 | Q703Af_mod == 1 | Q703Ag_mod == 1 | Q704Aa_mod == 1 | Q704Ab_mod == 1 | Q704Ac_mod == 1 | Q704Ad_mod == 1 | Q705Aa_mod == 1 | Q705Ab_mod == 1 | Q705Ac_mod == 1 | Q705Ad_mod == 1 | Q705Ae_mod == 1 | Q705Af_mod == 1)
+```
+
+It would be helpful to compare the social norms of all respondents with the results of those who have experienced any kind of abuse.
+
+```{r results='asis'}
+cat("The whole survey featured ")
+cat(nrow(df_questions))
+cat(" respondents. After filtering the results there are ")
+cat(nrow(df_violence_total))
+cat(" entries left, which is around ")
+cat(round(nrow(df_violence_total) / nrow(df_questions) * 100, 1))
+cat("% of all entries.")
+```
+Filtered data includes all respondents who have experienced any type of violence (social, verbal or physical). Plotting the same graphs for the newly filtered data will give information on whether social norms affect domestic violence cases. 
+
+```{r, fig.height = 3.5}
+Q603_count <- df_violence_total %>%
+  count(Q603_mod, na.rm = TRUE)
+
+Q603_count[[1]][1] = "Yes"
+Q603_count[[1]][2] = "No"
+Q603_count[[1]][3] = "Don't\nknow"
+# Q603_count[[1]][4] = "No answer"
+
+answ_order <- c("Yes","No","Don't\nknow", "No answer")
+
+Q603_count$Q603_mod <- factor(Q603_count$Q603_mod, levels = answ_order)
+
+pl603 <- ggplot(Q603_count, aes(x = Q603_mod, y = n)) +
+  geom_bar(stat = "identity", fill = "#377EB8") +
+  geom_label(aes(label = n), vjust = 0.5) + 
+  labs(title = "It is important for the man to show\n that he is the head of the household.",
+       x = "",
+       y = "Count") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0,1270))+
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 10),
+    panel.grid.minor = element_blank()
+    )  
+
+
+Q605_count <- df_violence_total %>%
+  count(Q605_mod, na.rm = TRUE)
+
+Q605_count[[1]][1] = "Yes"
+Q605_count[[1]][2] = "No"
+Q605_count[[1]][3] = "Don't\nknow"
+Q605_count[[1]][4] = "No answer"
+
+answ_order <- c("Yes","No","Don't\nknow", "No answer")
+
+Q605_count$Q605_mod <- factor(Q605_count$Q605_mod, levels = answ_order)
+
+pl605 <- ggplot(Q605_count, aes(x = Q605_mod, y = n)) +
+  geom_bar(stat = "identity", fill = "#377EB8") +
+  geom_label(aes(label = n), vjust = 0.5) + 
+  labs(title = "Women are obliged to have\n intercourse if they don't want.",
+       x = "",
+       y = "") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0,1270))+
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 10),
+    panel.grid.minor = element_blank()
+    )  
+
+grid.arrange(pl603, pl605, ncol = 2)
+
+```
+
+Comparing the newly made graphs with the previous ones, it can be seen that both show the same picture; there is no significant difference in the relationship between answers. Similar to the last case, most women think it is crucial for the man to show that he is the head of the household, and a smaller portion believes that it is not important for the men. Regarding the second question, the majority agrees that women are not obliged to have intercourse if they don't want to. 
+
+Another social norm is that women generally contribute less to the household's overall income and are not always allowed to spend earned money as they wish. This can also be viewed as an socioeconomic factor.
+
+```{r, fig.height = 3.3}
+Q1103_count <- df_violence_total %>%
+  count(Q1103_mod)
+
+Q1103_count <- Q1103_count %>%
+  filter(!is.na(Q1103_mod))
+
+Q1103_count[[1]][1] = "As I\nwish"
+Q1103_count[[1]][2] = "Some part\nto\nhusband"
+Q1103_count[[1]][3] = "Everyting\nto\nhusband"
+Q1103_count[[1]][4] = "Some/all\nto\nsomeone"
+# Q1103_count[[1]][5] = "Don't\nknow"
+# Q1103_count[[1]][6] = "No\nanswer"
+
+Q1103_count <- Q1103_count[-c(5,6),]
+
+pl1103 <- ggplot(Q1103_count, aes(x = Q1103_mod, y = n)) +
+  geom_bar(stat = "identity", fill = "#377EB8") +
+  geom_label(aes(label = n), vjust = 0.5) + 
+  labs(title = "How are you able\nto spend earned money?",
+       x = "",
+       y = "Count") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0,600))+
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x.bottom = element_text(size = 9),
+    panel.grid.minor = element_blank()
+    )  
+
+
+Q1104_count <- df_violence_total %>%
+  count(Q1104_mod)
+
+Q1104_count <- Q1104_count %>%
+  filter(!is.na(Q1104_mod))
+
+Q1104_count[[1]][1] = "More\nthan\nhusband"
+Q1104_count[[1]][2] = "Less\nthan\nhusband"
+Q1104_count[[1]][3] = "Equal"
+Q1104_count[[1]][4] = "Don't\nknow"
+
+Q1104_count$Q1104_mod <- factor(Q1104_count$Q1104_mod, c("More\nthan\nhusband",
+                                                         "Less\nthan\nhusband",
+                                                         "Equal",
+                                                         "Don't\nknow"))
+
+pl1104 <- ggplot(Q1104_count, aes(x = Q1104_mod, y = n)) +
+  geom_bar(stat = "identity", fill = "#377EB8") +
+  geom_label(aes(label = n), vjust = 0.5) + 
+  labs(title = "What is proportion of your\ninvestment into the household?",
+       x = "",
+       y = "") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0,600))+
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.minor = element_blank()
+    )  
+
+grid.arrange(pl1103, pl1104, ncol = 2)
+```
+
+The above graphs show that the vast majority of women spend their earned money as they wish, and only a tiny portion gives money to their partner or someone else. On the other hand, the majority earn less than their partner and contribute less to the household. Once again, it is not possible to tell that specific social norms affect domestic violence.
+
+\newpage
+### Comparison of violence globally
+
+After having discussed different social, economic and cultural factors that may influence gender violence in Armenia, we are going to look at those factors in all over the world to make the results more comprehensive. The main idea is to compare Armenia with countries that have high as well as low rate of gender violence. We will also understand which group Armenia belongs to (countries with high or low rate of gender violence).
+
+\textit{Hypothesis: Armenia belongs to the group of countries with low rate of violence against women (VaW).}
+
+The below graph shows respondents' answer combinations to the following questions: 
+
+- Do you agree or disagree with the following statement: Sometimes I feel uncomfortable in my house
+- How many people live with you in the same house on y axis (excluding the respondent)
+
+According to our literature review (Cepada et al, 2022), Oman, Uganda and Cameroon belong to the countries with high rate of violence against women all over the world. So, to understand where Armenia is in terms of VaW, we begin with comparing it with the above mentioned countries in terms of traditional and cultural norms.
+
+
+```{r}
+arm_high <- c('Armenia', 'Oman', 'Cameroon', 'Uganda')
+
+Armenia_high_VaW <- survey1 %>%
+  filter(Subregion %in% arm_high) %>%
+  filter(Gender == 'Female') %>%
+  select(Subregion, sog_w2_unsafe_strag_ag, sog_w2_unsafe_neutral, sog_w2_unsafe_strdis_dis,
+         sog_w2_hh_sz_1, sog_w2_hh_sz_25, sog_w2_hh_sz_610, sog_w2_hh_sz_11over)  %>%
+  mutate_at(vars(-Subregion), ~replace(., is.na(.), 0)) %>%
+  group_by(Subregion) %>%
+  mutate_at(vars(-Subregion), as.numeric) %>%
+  summarise_all(sum) %>%
+  mutate_at(vars(-Subregion), ~ (.* 0.5))
+
+
+melted1 <- Armenia_high_VaW %>%
+  melt(id.vars = "Subregion", measure.vars = c("sog_w2_unsafe_neutral", "sog_w2_unsafe_strag_ag", "sog_w2_unsafe_strdis_dis")) %>%
+  rename(Subregion=Subregion, Question1 = variable, Question1_answer =value )
+
+
+melted2 <- Armenia_high_VaW %>%
+  melt(id.vars = "Subregion",  measure.vars = c("sog_w2_hh_sz_1", "sog_w2_hh_sz_25", "sog_w2_hh_sz_610", "sog_w2_hh_sz_11over")) %>%
+  rename(Subregion=Subregion, Question2 = variable, Question2_answer = value )
+
+
+merged_data <- merge(melted1, melted2, by = c("Subregion"))
+
+
+ggplot(merged_data, aes(x = Question1, y = Question2, 
+                        color = ((Question1_answer+Question2_answer)*100/200))) +
+  geom_point(size = 6.5) +
+  labs(title = "Cultural Norms: How people from different\ncountries with high VaW feel about big household?",
+       x = "Sometimes I feel uncomfortable in my house.",
+       y = "Number of People in the House",
+       color = "Response\nCombination \nFrequency(%)") + 
+  scale_color_viridis_c(breaks = seq(10,85, by = 10)) +
+  facet_wrap(~ Subregion) +
+  scale_x_discrete(labels = c('Neutral', 'Agree', 'Disagree')) +
+  scale_y_discrete(labels = c('1', '2-5', '6-10' ,'11+')) +
+  theme_bw() +
+  theme(axis.title.x = element_text(margin = margin(b = 10), vjust = -3.5),
+        plot.title = element_text(hjust = 0.5, lineheight = 1),
+        panel.border = element_rect(color = "gray"),
+        strip.background = element_rect(fill = "gray", color = "gray"),
+        panel.grid.major = element_line(linetype = "dashed"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())
+  
+
+```
+
+\par\bigskip
+
+In Armenia the most frequent answer combination (40%) of two questions was (Disagree, 2-5), meaning that respondents usually felt comfortable in their house which consisted of 2-5 people. So the message that the plot conveys about Armenia is that the traditional Armenian family consist of 2-5 members, where women usually feel comfortable.
+
+In Cameroon most women reported not feeling comfortable in their houses and the traditional family again consists of 2-5 members. When comparing this result with the one from Armenia we see that in the house with almost equal number of people, women feel uncomfortable in Cameroon and comfortable in Armenia.
+
+In Uganda the picture is almost identical to Cameroon, which again shows that Armenia is in a better place in terms of VaW compared to this country.
+
+Respondents from Oman mostly answered that they felt uncomfortable in their houses of 2-5 people which is again a bad result in terms of VaW compared to Armenia.
+
+So far, we've seen that Armenia definitely has lower rate of VaW compared to countries countries where VaW is the most frequent. Now, we compare Armenia with countries that have low rate of VaW to further analyze whether Armenia is somewhere in between the countries with high and low rate of VaW or it can be classified as a country with low VaW
+
+\par\bigskip
+
+```{r}
+arm_low <- c('Armenia', 'Canada', 'Germany', 'France')
+
+Armenia_low_VaW <- survey1 %>%
+  filter(Subregion %in% arm_low) %>%
+  filter(Gender == 'Female') %>%
+  select(Subregion, sog_w2_unsafe_strag_ag, sog_w2_unsafe_neutral, sog_w2_unsafe_strdis_dis,
+         sog_w2_hh_sz_1, sog_w2_hh_sz_25, sog_w2_hh_sz_610, sog_w2_hh_sz_11over)  %>%
+  mutate_at(vars(-Subregion), ~replace(., is.na(.), 0)) %>%
+  group_by(Subregion) %>%
+  mutate_at(vars(-Subregion), as.numeric) %>%
+  summarise_all(sum) %>%
+  mutate_at(vars(-Subregion), ~ (.* 0.5))
+
+
+melted1 <- Armenia_low_VaW %>%
+  melt(id.vars = "Subregion", measure.vars = c("sog_w2_unsafe_neutral", "sog_w2_unsafe_strag_ag", "sog_w2_unsafe_strdis_dis")) %>%
+  rename(Subregion=Subregion, Question1 = variable, Question1_answer =value )
+
+
+melted2 <- Armenia_low_VaW %>%
+  melt(id.vars = "Subregion",  measure.vars = c("sog_w2_hh_sz_1", "sog_w2_hh_sz_25", "sog_w2_hh_sz_610", "sog_w2_hh_sz_11over")) %>%
+  rename(Subregion=Subregion, Question2 = variable, Question2_answer = value )
+
+
+merged_data <- merge(melted1, melted2, by = c("Subregion"))
+
+
+ggplot(merged_data, aes(x = Question1, y = Question2, 
+                        color = ((Question1_answer+Question2_answer)*100/200))) +
+  geom_point(size = 6.5) +
+  labs(title = "Cultural Norms: How people from different\ncountries with low VaW feel about big household?",
+       x = "Sometimes I feel uncomfortable in my house.",
+       y = "Number of People in the House",
+       color = "Response\nCombination \nFrequency(%)") +
+  scale_color_viridis_c(breaks = seq(10,85, by = 10)) +
+  facet_wrap(~ Subregion) +
+  scale_x_discrete(labels = c('Neutral', 'Agree', 'Disagree')) +
+  scale_y_discrete(labels = c('1', '2-5', '6-10' ,'11+')) +
+  theme_bw() +
+  theme(axis.title.x = element_text(margin = margin(b = 10), vjust = -3.5),
+        plot.title = element_text(hjust = 0.5, lineheight = 1),
+        panel.border = element_rect(color = "gray"),
+        strip.background = element_rect(fill = "gray", color = "gray"),
+        panel.grid.major = element_line(linetype = "dashed"),
+        panel.grid.major.x = element_blank(),
+        axis.ticks = element_blank())
+  
+```
+\par\bigskip
+
+
+This shows that respondents from Canada, France and Germany answered the questions mostly the way Armenian respondents did, that is, they claimed being comfortable and living with 2-5 family members. The only difference between mentioned 3 countries and Armenia is that in Canada, France and Germany the next frequent combination of answers was living only with one person and again feeling comfortable. So, we can conclude that even though the traditional families in Armenia and countries with low VaW differ slightly in size, in all cases, women feel comfortable.
+Moreover, all the other answer combinations have almost the same frequency in Armenia as in other 3 countries (France, Canada, Germany). Hence we can classify Armenia as a country with low VaW.
+
+
+
+As already discussed in previous parts, another thing that might influence violence in a household are economic norms. Hence, we are going to look through the questions discussing finance in a given family for different countries.
+
+\par\bigskip
+
+```{r}
+countries <- c('Armenia', 'Canada', 'Germany', 'France', 'Oman', 'Cameroon', 'Uganda')
+
+
+data1 <- survey1 %>%
+  filter(Subregion %in% countries, Gender == 'Female') %>%
+  select(Subregion, sog_w2_access_hh_mny_full, sog_w2_access_hh_mny_limited) %>%
+    rename(Full = sog_w2_access_hh_mny_full, 
+           Limited = sog_w2_access_hh_mny_limited,
+           Subregion = Subregion) %>%
+  melt(id.vars = c('Subregion'), measure.vars = c('Full', 'Limited')) %>%
+  # na.omit() %>%
+  mutate(value = ifelse(is.na(value), 0, value)) %>%
+  group_by(Subregion, variable) %>%
+  mutate(value = sum(as.numeric(value))*0.5) %>%
+  distinct(.keep_all = TRUE)
+
+
+
+q1 <- ggplot(data1, aes(x = variable, y = value, fill = Subregion)) +
+  geom_tile(color = "black") +
+  labs(x = "Options", y = "Response(%)", fill = "Country",
+       title = "What's your access to household money?\n") +
+  theme_minimal() +
+  theme(legend.position = 'bottom',
+        legend.text = element_text(size = 8),
+        legend.title = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 10, hjust = 0.4),
+        plot.title = element_text(size = 10, hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        legend.key.height = unit(4, "mm"),
+        legend.key.width = unit(4, "mm")
+      ) 
+
+
+data2 <- survey1 %>%
+  filter(Subregion %in% countries, Gender == 'Female') %>%
+  select(Subregion, sog_w2_dcd_prchs_self) %>%
+  rename(me = sog_w2_dcd_prchs_self) %>%
+  mutate(me = ifelse(is.na(me), 0, me)) %>%
+  group_by(Subregion) %>%
+  mutate(me = sum(as.numeric(me))*0.5) %>%
+  distinct(.keep_all = TRUE)
+
+
+q2 <-ggplot(data2) +
+  geom_bar(aes(x = Subregion, y = me, fill = Subregion), stat ='identity') +
+  scale_fill_manual(values = c('Armenia' = "#F8766D")) +
+  labs(x = '', y = 'Response(%)', 
+       title = 'Which proportion of women\ndecides on big purchases in the family?') +
+  theme_minimal() +
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 45, vjust = 1.3, hjust = 1),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 10),
+        plot.title = element_text(size = 10, hjust = 0.5),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.x = element_blank())
+
+grid.arrange(q1, q2, ncol = 2, top = c("Economic Norms"))
+
+```
+\par\bigskip
+
+The left plot shows the answers to the question about the level of money access women have in their household in different countries. To begin with, there is big difference between responses in countries with low(more than 50% answering Full) and high(less that 35% answering Full) VaW rates. This indicates that economic factors do have correlation with the rate of VaW. The results are consistent with above discussed plots, since we again see that women from Canada, Armenia, Germany and France answered that they have Full access to household money. Moreover, after Canada, even among countries with low VaW, Armenia has the largest proportion of women reporting that they had full access to money in their families.
+
+The right plot shows that again in countries where women had full access to household money, they could decide on large purchases and Armenia is among those countries. In this case, Armenian respondents claiming that they could decide on purchases, were not very prevailing compared to other countries. We will see similar picture in other plots when talking about Armenian families later on. As previous plots have shown too, here Oman again has the worst results.
+
+\par\bigskip
+
+
+Finally, we are considering social factors in different countries, more specifically, we are going to investigate how different societies treat man and woman, since social factors can also cause violence. To do that we are visualizing the answer of women from different countries to the following questions:
+
+- How much do you agree or disagree with the following statement? "A woman's most important role is to take care of her home and children."
+
+- How much do you agree or disagree with the following statement, “Household expenses are the responsibility of the man, even if his wife can help him?"
+
+\par\bigskip
+
+```{r}
+spmat <- survey1 %>%
+  filter(Gender == 'Female') %>%
+  filter(Subregion %in% c('Armenia', 'Canada', 'Germany', 'France', 'Oman', 'Cameroon', 'Uganda')) %>%
+
+  select(Subregion, b4_agree, b4_neutral, b4_disagree,
+         c3_agree, c3_neutral, c3_disagree) %>%
+  na.omit() %>%
+  melt(id.vars = c('Subregion', 'b4_agree', 'b4_neutral', 'b4_disagree')) %>%
+  rename('c3' = 'variable', 'c3_answer' = 'value') %>%
+  melt(measure.vars = c('b4_agree', 'b4_neutral', 'b4_disagree')) %>%
+  rename('b4' = 'variable', 'b4_answer' = 'value') %>%
+  mutate(c3 = ifelse(c3 == 'c3_neutral', 'neutral', ifelse(c3 == 'c3_agree', 'agree', 'disagree'))) %>%
+  mutate(b4 = ifelse(b4 == 'b4_neutral', 'neutral', ifelse(b4 == 'b4_agree', 'agree', 'disagree')))
+
+
+ggplot(spmat, mapping = aes(x = c3_answer, y = b4_answer, color = Subregion)) + 
+  geom_point(size = 2.5) + facet_grid(c3~b4) + 
+  geom_smooth(inherit.aes = F, data = spmat, 
+              mapping = aes(x = c3_answer, y = b4_answer), 
+              method = 'lm', se = F, linewidth = 0.7) +
+  labs(x = 'Woman is responsible for chores and children', 
+       y = 'Man is responsible for family expenses', 
+       title = 'Social Norms: Response % by the level of agreement', color = 'Country') +
+  theme_bw() +
+  theme(panel.border = element_rect(color = "gray"),
+        strip.background = element_rect(fill = "lightgray", color = "gray"),
+        axis.title.y = element_text(vjust = 2),
+        axis.title.x = element_text(vjust = 0), 
+        plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
+```
+\par\bigskip
+
+The plot shows that there is a linear correlation between agreeing on both claims, disagreeing on both claims, being neutral about both claims, hence the ascending trend demonstrated with blue lines on the diagonal. This implies that people were inclined to give the same answer to both questions. Also, there is a descending pattern for the cases when people answered agree to one question and disagree to another question (agree, disagree) or vice versa (disagree, agree), which shows that if some person agrees on one claim, they are less likely to disagree on the other claim. The takeaway is that the tendencies of answers were similar among all countries. Looking closer, we notice outliers which are Uganda and Armenia. Another interesting thing is that usually those dots appear in opposite sides of the line, quite far from each other. So we can conclude that compared to all other countries, social norms are different in Armenia and Uganda, moreover, Armenia is one type of extreme case and Uganda is another type of extreme case. For example, in Armenia about 40% disagreed on both claims while in Uganda 10%  disagreed with the claim about woman and 45% disagreed with the claim about men. In case of Uganda this might be the result of high VaW, in case of Armenia this might be indicator of unique cultural/social norms and family model since we have seen both in previous plot as well.
+
+
+
+\newpage
+## Conclusions
+
+Our first hypothesis was about the influence of socioeconomic factors in Armenia. The husband's education level is not a significant contributor to domestic violence rate, we cannot see neither negative nor positive connection between the number of years the husband has and the number of injuries reported for that category (number of years of education), also for all categories the majority of the participants have not experienced injuries from their husbands. No relationship between drinking frequency and abuse was established using the given data. Abusive family members factor was also considered. It was found that sons of abusive husbands have less tendency to be abusive. We reviewed the agreement inside the families and found that couples mostly agreed on pregnancy-related questions. (Please note, that the hypotheses were tested based on the data, where the respondents were females.) For those who had some disagreements, additional factors were looked at to see if the violence increased in the case of disagreements. No evidence was found to support the latter claim. This means that Armenian families have similar attitudes towards pregnancy, and it doesn't affect the violence against women. 
+
+The second hypothesis was about the influence of social norms in Armenia. The initial check was to see if women think that the man has the right to hit his wife. For those who replied "Yes," additional questions were reviewed regarding social, verbal, and physical abuse. The most frequent abuses were demanding the wife's location at any time and cursing at her. Additionally, a comparison was made to see if those who had experienced violence had different opinions on social norms. Responses for two questions were examined, and they had similar proportions compared to the answers for all respondents. We can conclude that social norms do not affect cases of domestic violence in Armenia.
+
+The final hypothesis was about comparison of violence globally. Armenia was compared with countries that have low (Germany, France and Canada) and high (Cameroon, Oman and Uganda) rates of violence against women (VaW). Comparison showed that Armenia is more similar to countries that have low VaW. Financial situation was examined, for which similar results were perceived - Armenia is among countries that have low VaW. Finally, social factors were considered for the selected countries. Answers were mostly similar for most of the countries, some variations for Armenia might be because of traditional family models. 
+
+\newpage
+## Appendix
+
+### Interactive dashboard
+
+We have also developed an interactive dashboard designed to empower and inform various stakeholders, including government officials, policymakers, law enforcement agencies, NGOs, schools, and other educational institutions about gender equality all over the world. This platform provides a comprehensive overview of gender equality based on aggregated weighted statistics at the regional level by gender. It presents data from the 2020 Survey on Gender Equality At Home and includes insights at the country and regional levels for the 2021 wave. For further functionalities visit: 
+
+- https://gender-equality-survey-interactive-dashboard.shinyapps.io/Interactive-Dashboard/
+
+- https://gender-equality-survey-interactive-dashboard.shinyapps.io/Dashboard2/
+
+\newpage
+### Additional visualization
+
+The next visualization was created for testing the first hypothesis, however its interpretation was confusing, since selected questions had different options. Initially we wanted to understand whether there is any obvious pattern between the economic conditions of the family(like income) and gender violence. We also wanted to find out whether there are some social factors that can somehow influence situations connected with gender violence as well as family income. 
+\par\bigskip
+
+```{r}
+par_cord_data <- data %>%
+  select(Q119, Q122, Q702, Q707y,  Q111d) %>%
+  mutate(Q122 = ifelse(is.na(Q122), NA, as.numeric(substr(Q122, 1, 1)))) %>%
+  mutate(Q111d = ifelse(is.na(Q111d), NA,
+                        gsub("^(\\d+)\\. .*", "\\1", data$Q111d))) %>%
+  mutate(Q111d = ifelse(is.na(Q111d) | Q111d == '10', Q111d,
+                        as.numeric(substr(Q111d, 1, 1)))) %>%
+  mutate(Q111d = ifelse(Q111d == '10', 10, Q111d)) %>%
+  mutate(id = 1:length(Q119)) %>%
+  melt(id.vars = 'id') %>%
+  mutate(value = ifelse(is.na(value), 0, value)) %>% 
+  mutate(value = as.numeric(value)) %>%
+  filter(value <= 10)
+
+
+pastel_colors <- c("#E2586B", "#405C89", "#569871", "#B58C26", '#9A0ACF')
+
+ggplot(data = par_cord_data, aes(x = variable, y = value)) +
+geom_line(aes(group = id, color = variable), alpha = 0.07) +
+  labs(title = 'Economic Factors and Gender Violence',
+       x = 'Question', y = 'Options', color = 'Questions') +
+  scale_y_continuous(breaks = c(0:10)) +
+  scale_color_manual(
+    name = NULL, 
+    values = pastel_colors, 
+    labels = c("Q119: Are you married or living together now?", 
+               "Q122: Who was the initiator of the divorce?", 
+               "Q702: How frequently did you have fights?", 
+               "Q707y: Are there any violence signs on the respondent's body?", 
+               "Q111d: What is your main source of income?")) +
+  theme_minimal() +
+  theme(
+    legend.position = 'bottom',
+    legend.direction = 'horizontal',  
+    legend.text = element_text(hjust = 0, size = 7),
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(linetype = "dashed")) +
+  guides(
+    color = guide_legend(
+    ncol = 2, 
+    byrow = F, 
+    title.position = 'bottom',
+    override.aes = list(alpha = 1)))
+
+```
+\par\bigskip
+The options for each question are presented below.
+
+* Q119 - (1 - Currently married, 2 - Currently not married, don't live together, 3 - Lives with partner, are not married, 4 - Has partner, 5 - Not married, doesn't have a partner, 6 - Married, lives with husband for a long period of time, 7 - Has female partner)
+
+* Q122 - (1 - Woman, 2 - Partner, 3 - Both, 6 - Other, 8 - Doesn't know, 9 - Prefers not to say)
+
+* Q702 - (1 - Rarely, 2 - Sometimes, 3 - Frequently, 4 - Never, 8 - Don't know, 9 - Prefers not to say)
+
+* Q707y - (1 - Yes, 2 - No)
+
+* Q111d - (1 - Woman's work, 2 - Woman's and partner's work, 3 - Partner's work, 4 - Other household member, 5 - Support from relatives, 6 - Support from Government, 7 - Other, 8 - Don't know, 9 - Prefers not to say)
+
+
+\par\bigskip
+Those who were divorced were the ones who either initiated the divorce themselves, or with their husband.
+Still, those people answered that they rarely had any fights with their husband. But most of them had signs of violence on their bodies and for the same group of people we see various sources of income.
+\par\bigskip
+Another group of people claimed that they were not divorced(formally), but informally initiated divorce together with their husband. Even though this group of respondents again claimed not having frequent fights with their husband, signs of physical abuse were still visible on their bodies. In this case the income source of the family was again distributed among different types.
+\par\bigskip
+Another obvious pattern is that independent from the fact whether the respondent was divorced or not, was the initiator of the divorce or not, they usually claimed not having frequent fights with their husband, but in most of the above mentioned cases, the interviewer still noticed that there are some signs of violence.
+The income source was again various for this group.
+\par\bigskip
+
+We don't have any vivid evidence that the violence rate changes based on the income of the family. We see that some social factors influence the violence rate, since most of the women do not want to voice about being confronted to violence at home and in many of cases, they do not initialize divorce and prefer enduring violence. These are factors connected with stereotypes present in Armenian society.
+
+
+## References
+
+United Nations Entity for Gender Equality and the Empowerment of Women (UN Women). (2021). "Violence against Women and Girls in the Arab States." Retrieved from 'https://arabstates.unwomen.org/sites/default/files/Field%20Office%20Arab%20States/Attachments/Publications/2021/11/Summary_Keyfindings_Final_EN.pdf'
+
+World Health Organization (WHO). (March 2021). "Violence against Women - Fact Sheet." Retrieved from 'https://www.who.int/news-room/fact-sheets/detail/violence-against-women'
+
+Sardinha, L., Maheu-Giroux, M., Stöckl, H., Meyer, S. R., & García-Moreno, C. (2022). Global, regional, and national prevalence estimates of physical or sexual, or both, intimate partner violence against women in 2018. Lancet (London, England), 399(10327), 803–813. https://doi.org/10.1016/S0140-6736(21)02664-7
+
+Humanitarian Data Exchange. (2021). "Survey on Gender Equality at Home." Retrieved from 'https://data.humdata.org/dataset/survey-on-gender-equality-at-home'
+
+Cepeda, I., Lacalle-Calderon, M., & Torralba, M. (2022). Measuring Violence Against Women: A Global Index. Journal of interpersonal violence, 37(19-20), NP18614–NP18638. https://doi.org/10.1177/08862605211037424
+
+Armenian Statistical Committee. (2021). "Report on Gender-Based Violence." Retrieved from 'https://armstat.am/file/article/gbv_report_eng.pdf'
+
+Vartanian, V. (2023, August). Title of the Article. Hetq Online. Retrieved from https://hetq.am/en/article/159066
+
+Queensland Centre for Domestic and Family Violence Research. (n.d.). What About Men?. No to Violence. Retrieved from https://noviolence.org.au/wp-content/uploads/2018/09/Whataboutmen.pdf
+
+
